@@ -20,7 +20,7 @@ st.set_page_config(layout="centered", page_icon="💬", page_title="Physician Vi
 
 # Data visualisation part
 
-st.title("💬 Physician View"")
+st.title("💬 Physician View")
 
 path = sample.data_path()
 fname = path + '/MEG/sample/sample_audvis-ave.fif'
