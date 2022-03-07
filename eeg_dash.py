@@ -22,15 +22,8 @@ times = np.arange(0.05, 0.151, 0.02)
 all_times = np.arange(-0.2, 0.5, 0.03)
 
 extrapolations = ['local', 'head', 'box']
-fig, axes = plt.subplots(figsize=(7.5, 4.5), nrows=2, ncols=3)
-
-# Here we look at EEG channels, and use a custom head sphere to get all the
-# sensors to be well within the drawn head surface
-for axes_row, ch_type in zip(axes, ('mag', 'eeg')):
-    for ax, extr in zip(axes_row, extrapolations):
-        evoked.plot_topomap(0.1, ch_type=ch_type, size=2, extrapolate=extr,
-                            axes=ax, show=False, colorbar=False,
-                            sphere=(0., 0., 0., 0.09))
-        ax.set_title('%s %s' % (ch_type.upper(), extr), fontsize=14)
+times = np.arange(0.05, 0.151, 0.01)
+fig, anim = evoked.animate_topomap(
+    times=times, ch_type='mag', frame_rate=2, time_unit='s', blit=False)
 fig.tight_layout()
 st.pyplot(fig)
