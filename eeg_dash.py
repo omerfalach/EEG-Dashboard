@@ -94,7 +94,7 @@ else:
     with _lock:
         # Just for debugging
         st.write('Producing new figure')
-        filtered_fig = raw_filtered.plot(n_channels=20, duration=30, show_scrollbars=False,
+        filtered_fig = raw_filtered.plot(n_channels=20, duration=30,
                                          show=False, remove_dc=False)
         filtered_fig.canvas.draw()
         filtered_image = np.fromstring(filtered_fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
