@@ -70,7 +70,7 @@ for ((freq_name, fmin, fmax), average), color, ax in zip(
                                                   stat_fun=stat_fun)
     ci_low = rescale(ci_low, average.times, baseline=(None, 0))
     ci_up = rescale(ci_up, average.times, baseline=(None, 0))
-        ax.fill_between(times, gfp + ci_up, gfp - ci_low, color=color, alpha=0.3)
+    ax.fill_between(times, gfp + ci_up, gfp - ci_low, color=color, alpha=0.3)
     ax.grid(True)
     ax.set_ylabel('GFP')
     ax.annotate('%s (%d-%dHz)' % (freq_name, fmin, fmax),
