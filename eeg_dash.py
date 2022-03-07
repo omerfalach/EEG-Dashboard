@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import mne
+mne.viz.set_3d_backend("notebook")
 from mne.datasets import somato
 from mne.datasets import sample
 from mne.minimum_norm import read_inverse_operator, compute_source_psd_epochs
