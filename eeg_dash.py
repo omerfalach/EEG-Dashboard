@@ -1,4 +1,5 @@
 import sys
+pip install vega-datasets
 import streamlit as st
 st.write(str(sys.path))
 # from datetime import datetime
