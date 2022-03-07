@@ -7,6 +7,22 @@ import mne
 from mne.datasets import somato
 from mne.baseline import rescale
 from mne.stats import bootstrap_confidence_interval
+
+OMMENT_TEMPLATE_MD = """{} - {}
+> {}"""
+
+
+def space(num_lines=1):
+    """Adds empty lines to the Streamlit app."""
+    for _ in range(num_lines):
+        st.write("")
+
+
+st.set_page_config(layout="centered", page_icon="💬", page_title="Patient View")
+
+# Data visualisation part
+
+st.title("💬 Patient View")
 data_path = somato.data_path()
 subject = '01'
 task = 'somato'
