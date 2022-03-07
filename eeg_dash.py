@@ -1,11 +1,10 @@
 import sys
-!pip install vega-datasets
 import streamlit as st
 st.write(str(sys.path))
 # from datetime import datetime
 
 
-# from vega_datasets import data
+from vega_datasets import data
 
 # from utils import chart, db
 
