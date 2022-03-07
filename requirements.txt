@@ -1,9 +1,9 @@
 # Requirements for streamlit_mne_demo
+streamlit
 numpy
 scipy
-streamlit
-matplotlib
+pandas
 mne==0.21.0
+matplotlib
 vega-datasets
 altair
-pandas
