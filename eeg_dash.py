@@ -1,41 +1,73 @@
-import altair as alt
-import pandas as pd
+import sys
 import streamlit as st
-from vega_datasets import data
+st.write(str(sys.path))
+# from datetime import datetime
 
-@st.experimental_memo
-def get_data():
-    source = data.stocks()
-    source = source[source.date.gt("2004-01-01")]
-    return source
 
-source = get_data()
+# from vega_datasets import data
 
-# Original time series chart. Omitted `get_chart` for clarity
-chart = get_chart(source)
+# from utils import chart, db
 
-# Input annotations
-ANNOTATIONS = [
-    ("Mar 01, 2008", "Pretty good day for GOOG"),
-    ("Dec 01, 2007", "Something's going wrong for GOOG & AAPL"),
-    ("Nov 01, 2008", "Market starts again thanks to..."),
-    ("Dec 01, 2009", "Small crash for GOOG after..."),
-]
+# COMMENT_TEMPLATE_MD = """{} - {}
+# > {}"""
 
-# Create a chart with annotations
-annotations_df = pd.DataFrame(ANNOTATIONS, columns=["date", "event"])
-annotations_df.date = pd.to_datetime(annotations_df.date)
-annotations_df["y"] = 0
-annotation_layer = (
-    alt.Chart(annotations_df)
-    .mark_text(size=15, text="⬇", dx=0, dy=-10, align="center")
-    .encode(
-        x="date:T",
-        y=alt.Y("y:Q"),
-        tooltip=["event"],
-    )
-    .interactive()
-)
 
-# Display both charts together
-st.altair_chart((chart + annotation_layer).interactive(), use_container_width=True)
+# def space(num_lines=1):
+#     """Adds empty lines to the Streamlit app."""
+#     for _ in range(num_lines):
+#         st.write("")
+
+
+# st.set_page_config(layout="centered", page_icon="💬", page_title="Commenting app")
+
+# # Data visualisation part
+
+# st.title("💬 Commenting app")
+
+# source = data.stocks()
+# all_symbols = source.symbol.unique()
+# symbols = st.multiselect("Choose stocks to visualize", all_symbols, all_symbols[:3])
+
+# space(1)
+
+# source = source[source.symbol.isin(symbols)]
+# chart = chart.get_chart(source)
+# st.altair_chart(chart, use_container_width=True)
+
+# space(2)
+
+# # Comments part
+
+# conn = db.connect()
+# comments = db.collect(conn)
+
+# with st.expander("💬 Open comments"):
+
+#     # Show comments
+
+#     st.write("**Comments:**")
+
+#     for index, entry in enumerate(comments.itertuples()):
+#         st.markdown(COMMENT_TEMPLATE_MD.format(entry.name, entry.date, entry.comment))
+
+#         is_last = index == len(comments) - 1
+#         is_new = "just_posted" in st.session_state and is_last
+#         if is_new:
+#             st.success("☝️ Your comment was successfully posted.")
+
+#     space(2)
+
+#     # Insert comment
+
+#     st.write("**Add your own comment:**")
+#     form = st.form("comment")
+#     name = form.text_input("Name")
+#     comment = form.text_area("Comment")
+#     submit = form.form_submit_button("Add comment")
+
+#     if submit:
+#         date = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+#         db.insert(conn, [[name, comment, date]])
+#         if "just_posted" not in st.session_state:
+#             st.session_state["just_posted"] = True
+#         st.experimental_rerun()
