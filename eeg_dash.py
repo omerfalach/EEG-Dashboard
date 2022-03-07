@@ -1,151 +1,127 @@
-import altair as alt
-import pandas as pd
-import streamlit as st
-from vega_datasets import data
+import os
+import sys
+from os.path import join
+from matplotlib.backends.backend_agg import RendererAgg
+import numpy as np
 
+import mne
+import streamlit as st
+
+# Page Configuration 
 st.set_page_config(
-    page_title="Time series annotations", page_icon="⬇", layout="centered"
-)
-
-
-@st.experimental_memo
-def get_data():
-    source = data.stocks()
-    source = source[source.date.gt("2004-01-01")]
-    return source
-
-
-@st.experimental_memo(ttl=60 * 60 * 24)
-def get_chart(data):
-    hover = alt.selection_single(
-        fields=["date"],
-        nearest=True,
-        on="mouseover",
-        empty="none",
+    page_title="Filterung von EEG-Daten",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
     )
 
-    lines = (
-        alt.Chart(data, title="Evolution of stock prices")
-        .mark_line()
-        .encode(
-            x="date",
-            y="price",
-            color="symbol",
-            # strokeDash="symbol",
-        )
-    )
+# cache is turned off for Raw-Object, maybe if we want to implement reloading after changing some features
+# of the raw-object (n_channels, sfreq), we could implement a custom hash-function for that
+@st.cache(hash_funcs={mne.io.fiff.raw.Raw: lambda _: None}, allow_output_mutation=True)
+def load_raw():
+    sample_data_folder = mne.datasets.sample.data_path()
+    sample_data_raw_file = join(sample_data_folder, 'MEG', 'sample',
+                                'sample_audvis_raw.fif')
+    raw = mne.io.read_raw_fif(sample_data_raw_file)
 
-    # Draw points on the line, and highlight based on selection
-    points = lines.transform_filter(hover).mark_circle(size=65)
+    # All the following methods operate in-Place
+    # Reducing data to time window in [s]
+    raw.crop(0, 60)
 
-    # Draw a rule at the location of the selection
-    tooltips = (
-        alt.Chart(data)
-        .mark_rule()
-        .encode(
-            x="yearmonthdate(date)",
-            y="price",
-            opacity=alt.condition(hover, alt.value(0.3), alt.value(0)),
-            tooltip=[
-                alt.Tooltip("date", title="Date"),
-                alt.Tooltip("price", title="Price (USD)"),
-            ],
-        )
-        .add_selection(hover)
-    )
+    # Resampling takes quit a long time, maybe filtering the higher sampling-rate is faster than first resampling
+    #   and then filtering the resampled data
 
-    return (lines + points + tooltips).interactive()
+    # # Resampling data to sampling-frequency in [Hz]
+    # st.write('Reducing SampleRate')
+    # loaded_raw.resample(200)
+
+    # Picking only Gradiometer-Channels (example for slow drift in this data)
+    raw.pick_types(meg=False, eeg=True, stim=False, eog=False)
+    # Uncomment this and comment the previous line to see some EKG-Artefacts
+    # raw.pick_types(meg='mag', eeg=False, stim=False, eog=False)
+
+    # Data has to be loaded into memory for filtering afterwards
+    raw.load_data()
+
+    return raw
 
 
-st.title("⬇ Time series annotations")
+# cache is turned off for Raw-Object, should only depend on hp/lp-parameters
+@st.cache(hash_funcs={mne.io.fiff.raw.Raw: lambda _: None}, allow_output_mutation=True)
+def filter_raw(raw, hp, lp):
+    with st.spinner(text='Filtering'):
+        raw = raw.copy().filter(hp, lp)
+    return raw
 
-st.write("Give more context to your time series using annotations!")
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    ticker = st.text_input("Choose a ticker (⬇💬👇ℹ️ ...)", value="⬇")
-with col2:
-    ticker_dx = st.slider(
-        "Horizontal offset", min_value=-30, max_value=30, step=1, value=0
-    )
-with col3:
-    ticker_dy = st.slider(
-        "Vertical offset", min_value=-30, max_value=30, step=1, value=-10
-    )
+@st.cache(allow_output_mutation=True)
+def FigureCache():
+    return {'EEG-Plot': dict(),
+            'PSD-Plot': dict()}
 
-# Original time series chart. Omitted `get_chart` for clarity
-source = get_data()
-chart = get_chart(source)
+# Hide Burger Menu
+hide_menu_style = """
+        <style>
+        #MainMenu {visibility: hidden;}
+        </style>
+        """
+st.markdown(hide_menu_style, unsafe_allow_html=True)
 
-# Input annotations
-ANNOTATIONS = [
-    ("Mar 01, 2008", "Pretty good day for GOOG"),
-    ("Dec 01, 2007", "Something's going wrong for GOOG & AAPL"),
-    ("Nov 01, 2008", "Market starts again thanks to..."),
-    ("Dec 01, 2009", "Small crash for GOOG after..."),
-]
+st.title('EEG-Filter Demo')
+st.sidebar.write('<Erklär-Text>')
 
-# Create a chart with annotations
-annotations_df = pd.DataFrame(ANNOTATIONS, columns=["date", "event"])
-annotations_df.date = pd.to_datetime(annotations_df.date)
-annotations_df["y"] = 0
-annotation_layer = (
-    alt.Chart(annotations_df)
-    .mark_text(size=15, text=ticker, dx=ticker_dx, dy=ticker_dy, align="center")
-    .encode(
-        x="date:T",
-        y=alt.Y("y:Q"),
-        tooltip=["event"],
-    )
-    .interactive()
-)
+loaded_raw = load_raw()
+# Get Filter-Parameters
+highpass = st.sidebar.slider('Hochpass-Filter', min_value=0, max_value=100, value=0)
+lowpass = st.sidebar.slider('Tiefpass-Filter', min_value=0, max_value=100, value=100)
 
-# Display both charts together
-st.altair_chart((chart + annotation_layer).interactive(), use_container_width=True)
+# Filter raw
+raw_filtered = filter_raw(loaded_raw, highpass, lowpass)
 
-st.write("## Code")
+figure_cache = FigureCache()
+# Create a string as hash from the Filter-Parameters
+filter_hash = f'{highpass}-{lowpass}'
 
-st.write(
-    "See more in our public [GitHub repository](https://github.com/streamlit/example-app-time-series-annotation)"
-)
+# Lock functionality used to fix a bug with Matplot which influences multiuser interaction.
+_lock = RendererAgg.lock
 
-st.code(
-    f"""
-import altair as alt
-import pandas as pd
-import streamlit as st
-from vega_datasets import data
-@st.experimental_memo
-def get_data():
-    source = data.stocks()
-    source = source[source.date.gt("2004-01-01")]
-    return source
-source = get_data()
-# Original time series chart. Omitted `get_chart` for clarity
-chart = get_chart(source)
-# Input annotations
-ANNOTATIONS = [
-    ("Mar 01, 2008", "Pretty good day for GOOG"),
-    ("Dec 01, 2007", "Something's going wrong for GOOG & AAPL"),
-    ("Nov 01, 2008", "Market starts again thanks to..."),
-    ("Dec 01, 2009", "Small crash for GOOG after..."),
-]
-# Create a chart with annotations
-annotations_df = pd.DataFrame(ANNOTATIONS, columns=["date", "event"])
-annotations_df.date = pd.to_datetime(annotations_df.date)
-annotations_df["y"] = 0
-annotation_layer = (
-    alt.Chart(annotations_df)
-    .mark_text(size=15, text="{ticker}", dx={ticker_dx}, dy={ticker_dy}, align="center")
-    .encode(
-        x="date:T",
-        y=alt.Y("y:Q"),
-        tooltip=["event"],
-    )
-    .interactive()
-)
-# Display both charts together
-st.altair_chart((chart + annotation_layer).interactive(), use_container_width=True)
-""",
-    "python",
-)
+# Loading cached figure or creating a new one
+if filter_hash in figure_cache['EEG-Plot']:
+    # Just for debugging
+    st.write('Loading cached figure')
+    filtered_image = figure_cache['EEG-Plot'][filter_hash]
+else:
+    with _lock:
+        # Just for debugging
+        st.write('Producing new figure')
+        filtered_fig = raw_filtered.plot(n_channels=20, duration=30, show_scrollbars=False,
+                                         show=False, title='Filtern von EEG-Daten', remove_dc=False)
+        filtered_fig.canvas.draw()
+        filtered_image = np.fromstring(filtered_fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+        filtered_image = filtered_image.reshape(filtered_fig.canvas.get_width_height()[::-1] + (3,))
+        figure_cache['EEG-Plot'][filter_hash] = filtered_image
+
+st.write('EEG-Daten gefiltert:')
+st.image(filtered_image)
+
+# Loading cached figure or creating a new one
+if filter_hash in figure_cache['PSD-Plot']:
+    # Just for debugging
+    st.write('Loading cached figure')
+    psd_image = figure_cache['PSD-Plot'][filter_hash]
+else:
+    with _lock:
+        # Just for debugging
+        st.write('Producing new figure')
+        psd_fig = raw_filtered.plot_psd(show=False)
+        psd_fig.canvas.draw()
+        psd_image = np.fromstring(psd_fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+        psd_image = psd_image.reshape(psd_fig.canvas.get_width_height()[::-1] + (3,))
+        figure_cache['PSD-Plot'][filter_hash] = psd_image
+
+st.write('Frequenzspektrum:')
+st.image(psd_image)
+
+cache_size = sum([sum([sys.getsizeof(figure_cache[plot_type][freq_hash]) for freq_hash in figure_cache[plot_type]])
+                  for plot_type in figure_cache])
+st.write(f'Figure-Cache takes {cache_size} bytes')
