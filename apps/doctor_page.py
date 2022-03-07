@@ -6,22 +6,8 @@ import matplotlib.pyplot as plt
 from mne.datasets import sample
 from mne import read_evokeds
 def app():
-    COMMENT_TEMPLATE_MD = """{} - {}
-    > {}"""
-
-
-    def space(num_lines=1):
-        """Adds empty lines to the Streamlit app."""
-        for _ in range(num_lines):
-            st.write("")
-
-
-    st.set_page_config(layout="centered", page_icon="💬", page_title="Physician View")
-
     # Data visualisation part
-
-    st.title("💬 Physician View")
-
+    st.title("Physician View")
     path = sample.data_path()
     fname = path + '/MEG/sample/sample_audvis-ave.fif'
 
