@@ -5,79 +5,61 @@ import matplotlib.pyplot as plt
 
 import mne
 from mne.datasets import somato
-from mne.baseline import rescale
-from mne.stats import bootstrap_confidence_interval
-data_path = somato.data_path()
-subject = '01'
-task = 'somato'
-raw_fname = op.join(data_path, 'sub-{}'.format(subject), 'meg',
-                    'sub-{}_task-{}_meg.fif'.format(subject, task))
+from mne.datasets import sample
+from mne.minimum_norm import read_inverse_operator, compute_source_psd_epochs
 
-# let's explore some frequency bands
-iter_freqs = [
-    ('Theta', 4, 7),
-    ('Alpha', 8, 12),
-    ('Beta', 13, 25),
-    ('Gamma', 30, 45)
-]
-# set epoching parameters
-event_id, tmin, tmax = 1, -1., 3.
-baseline = None
 
-# get the header to extract events
-raw = mne.io.read_raw_fif(raw_fname)
-events = mne.find_events(raw, stim_channel='STI 014')
+data_path = sample.data_path()
+fname_inv = data_path + '/MEG/sample/sample_audvis-meg-oct-6-meg-inv.fif'
+fname_raw = data_path + '/MEG/sample/sample_audvis_raw.fif'
+fname_event = data_path + '/MEG/sample/sample_audvis_raw-eve.fif'
+label_name = 'Aud-lh'
+fname_label = data_path + '/MEG/sample/labels/%s.label' % label_name
+subjects_dir = data_path + '/subjects'
 
-frequency_map = list()
+event_id, tmin, tmax = 1, -0.2, 0.5
+snr = 1.0  # use smaller SNR for raw data
+lambda2 = 1.0 / snr ** 2
+method = "dSPM"  # use dSPM method (could also be MNE or sLORETA)
 
-for band, fmin, fmax in iter_freqs:
-    # (re)load the data to save memory
-    raw = mne.io.read_raw_fif(raw_fname)
-    raw.pick_types(meg='grad', eog=True)  # we just look at gradiometers
-    raw.load_data()
+# Load data
+inverse_operator = read_inverse_operator(fname_inv)
+label = mne.read_label(fname_label)
+raw = mne.io.read_raw_fif(fname_raw)
+events = mne.read_events(fname_event)
 
-    # bandpass filter
-    raw.filter(fmin, fmax, n_jobs=1,  # use more jobs to speed up.
-               l_trans_bandwidth=1,  # make sure filter params are the same
-               h_trans_bandwidth=1)  # in each band and skip "auto" option.
+# Set up pick list
+include = []
+raw.info['bads'] += ['EEG 053']  # bads + 1 more
 
-    # epoch
-    epochs = mne.Epochs(raw, events, event_id, tmin, tmax, baseline=baseline,
-                        reject=dict(grad=4000e-13, eog=350e-6),
-                        preload=True)
-    # remove evoked response
-    epochs.subtract_evoked()
+# pick MEG channels
+picks = mne.pick_types(raw.info, meg=True, eeg=False, stim=False, eog=True,
+                       include=include, exclude='bads')
+# Read epochs
+epochs = mne.Epochs(raw, events, event_id, tmin, tmax, picks=picks,
+                    baseline=(None, 0), reject=dict(mag=4e-12, grad=4000e-13,
+                                                    eog=150e-6))
 
-    # get analytic signal (envelope)
-    epochs.apply_hilbert(envelope=True)
-    frequency_map.append(((band, fmin, fmax), epochs.average()))
-    del epochs
-del raw
+# define frequencies of interest
+fmin, fmax = 0., 70.
+bandwidth = 4.  # bandwidth of the windows in Hz
+n_epochs_use = 10
+stcs = compute_source_psd_epochs(epochs[:n_epochs_use], inverse_operator,
+                                 lambda2=lambda2,
+                                 method=method, fmin=fmin, fmax=fmax,
+                                 bandwidth=bandwidth, label=label,
+                                 return_generator=True, verbose=True)
 
-# Helper function for plotting spread
-def stat_fun(x):
-    """Return sum of squares."""
-    return np.sum(x ** 2, axis=0)
-# Plot
-fig, axes = plt.subplots(4, 1, figsize=(10, 7), sharex=True, sharey=True)
-colors = plt.get_cmap('winter_r')(np.linspace(0, 1, 4))
-for ((freq_name, fmin, fmax), average), color, ax in zip(
-        frequency_map, colors, axes.ravel()[::-1]):
-    times = average.times * 1e3
-    gfp = np.sum(average.data ** 2, axis=0)
-    gfp = mne.baseline.rescale(gfp, times, baseline=(None, 0))
-    ci_low, ci_up = bootstrap_confidence_interval(average.data, random_state=0,
-                                                  stat_fun=stat_fun)
-    ci_low = rescale(ci_low, average.times, baseline=(None, 0))
-    ci_up = rescale(ci_up, average.times, baseline=(None, 0))
-    ax.fill_between(times, gfp + ci_up, gfp - ci_low, color=color, alpha=0.3)
-    ax.grid(True)
-    ax.set_ylabel('GFP')
-    ax.annotate('%s (%d-%dHz)' % (freq_name, fmin, fmax),
-                xy=(0.95, 0.8),
-                horizontalalignment='right',
-                xycoords='axes fraction')
-    ax.set_xlim(-1000, 3000)
+# compute average PSD over the first 10 epochs
+psd_avg = 0.
+for i, stc in enumerate(stcs):
+    psd_avg += stc.data
+psd_avg /= n_epochs_use
+freqs = stc.times  # the frequencies are stored here
+stc.data = psd_avg  # overwrite the last epoch's data with the average
 
-axes.ravel()[-1].set_xlabel('Time [ms]')
-st.pyplot(fig)
+brain = stc.plot(initial_time=10., hemi='lh', views='lat',  # 10 HZ
+                 clim=dict(kind='value', lims=(20, 40, 60)),
+                 smoothing_steps=3, subjects_dir=subjects_dir)
+brain.add_label(label, borders=True, color='k')
+st.pyplot(brain)
