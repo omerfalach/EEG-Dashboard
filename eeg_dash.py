@@ -94,8 +94,8 @@ else:
     with _lock:
         # Just for debugging
         st.write('Producing new figure')
-        filtered_fig = raw_filtered.plot(n_channels=20, duration=30, show_scrollbars=False,
-                                         show=False, title='Filtern von EEG-Daten')
+        filtered_fig = raw_filtered.plot(n_channels=20, duration=30,
+                                         show=False, title='Filtern von EEG-Daten', remove_dc=False)
         filtered_fig.canvas.draw()
         filtered_image = np.fromstring(filtered_fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
         filtered_image = filtered_image.reshape(filtered_fig.canvas.get_width_height()[::-1] + (3,))
