@@ -1,7 +1,7 @@
 # Requirements for streamlit_mne_demo
 numpy
 scipy
-streamlit==1.5.0
+streamlit
 matplotlib
 mne==0.21.0
 vega-datasets
