@@ -2,7 +2,6 @@
 numpy
 scipy
 streamlit
-matplotlib.pyplot
 matplotlib
 mne==0.21.0
 vega-datasets
