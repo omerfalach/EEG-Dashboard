@@ -25,5 +25,4 @@ extrapolations = ['local', 'head', 'box']
 times = np.arange(0.05, 0.151, 0.01)
 fig, anim = evoked.animate_topomap(
     times=times, ch_type='mag', frame_rate=2, time_unit='s', blit=False)
-fig.tight_layout()
 st.pyplot(fig)
