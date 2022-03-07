@@ -3,64 +3,34 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-import mne
-mne.viz.set_3d_backend("notebook")
-from mne.datasets import somato
 from mne.datasets import sample
-from mne.minimum_norm import read_inverse_operator, compute_source_psd_epochs
+from mne import read_evokeds
 
 
-data_path = sample.data_path()
-fname_inv = data_path + '/MEG/sample/sample_audvis-meg-oct-6-meg-inv.fif'
-fname_raw = data_path + '/MEG/sample/sample_audvis_raw.fif'
-fname_event = data_path + '/MEG/sample/sample_audvis_raw-eve.fif'
-label_name = 'Aud-lh'
-fname_label = data_path + '/MEG/sample/labels/%s.label' % label_name
-subjects_dir = data_path + '/subjects'
 
-event_id, tmin, tmax = 1, -0.2, 0.5
-snr = 1.0  # use smaller SNR for raw data
-lambda2 = 1.0 / snr ** 2
-method = "dSPM"  # use dSPM method (could also be MNE or sLORETA)
+path = sample.data_path()
+fname = path + '/MEG/sample/sample_audvis-ave.fif'
 
-# Load data
-inverse_operator = read_inverse_operator(fname_inv)
-label = mne.read_label(fname_label)
-raw = mne.io.read_raw_fif(fname_raw)
-events = mne.read_events(fname_event)
+# load evoked corresponding to a specific condition
+# from the fif file and subtract baseline
+condition = 'Left Auditory'
+evoked = read_evokeds(fname, condition=condition, baseline=(None, 0))
 
-# Set up pick list
-include = []
-raw.info['bads'] += ['EEG 053']  # bads + 1 more
 
-# pick MEG channels
-picks = mne.pick_types(raw.info, meg=True, eeg=False, stim=False, eog=True,
-                       include=include, exclude='bads')
-# Read epochs
-epochs = mne.Epochs(raw, events, event_id, tmin, tmax, picks=picks,
-                    baseline=(None, 0), reject=dict(mag=4e-12, grad=4000e-13,
-                                                    eog=150e-6))
+times = np.arange(0.05, 0.151, 0.02)
 
-# define frequencies of interest
-fmin, fmax = 0., 70.
-bandwidth = 4.  # bandwidth of the windows in Hz
-n_epochs_use = 10
-stcs = compute_source_psd_epochs(epochs[:n_epochs_use], inverse_operator,
-                                 lambda2=lambda2,
-                                 method=method, fmin=fmin, fmax=fmax,
-                                 bandwidth=bandwidth, label=label,
-                                 return_generator=True, verbose=True)
+all_times = np.arange(-0.2, 0.5, 0.03)
 
-# compute average PSD over the first 10 epochs
-psd_avg = 0.
-for i, stc in enumerate(stcs):
-    psd_avg += stc.data
-psd_avg /= n_epochs_use
-freqs = stc.times  # the frequencies are stored here
-stc.data = psd_avg  # overwrite the last epoch's data with the average
+extrapolations = ['local', 'head', 'box']
+fig, axes = plt.subplots(figsize=(7.5, 4.5), nrows=2, ncols=3)
 
-brain = stc.plot(initial_time=10., hemi='lh', views='lat',  # 10 HZ
-                 clim=dict(kind='value', lims=(20, 40, 60)),
-                 smoothing_steps=3, subjects_dir=subjects_dir)
-brain.add_label(label, borders=True, color='k')
-st.pyplot(brain)
+# Here we look at EEG channels, and use a custom head sphere to get all the
+# sensors to be well within the drawn head surface
+for axes_row, ch_type in zip(axes, ('mag', 'eeg')):
+    for ax, extr in zip(axes_row, extrapolations):
+        evoked.plot_topomap(0.1, ch_type=ch_type, size=2, extrapolate=extr,
+                            axes=ax, show=False, colorbar=False,
+                            sphere=(0., 0., 0., 0.09))
+        ax.set_title('%s %s' % (ch_type.upper(), extr), fontsize=14)
+fig.tight_layout()
+st.pyplot(fig)
